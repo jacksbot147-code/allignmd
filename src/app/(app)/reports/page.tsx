@@ -205,30 +205,32 @@ function BreakdownCard({
       {rows.length === 0 ? (
         <EmptyState title="Nothing to break down yet" hint={emptyHint} />
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>{firstColumn}</th>
-              <th>Submissions</th>
-              <th>Placed</th>
-              <th>Fill rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((g) => (
-              <tr key={g.key}>
-                <td style={{ fontWeight: 600 }}>{g.label}</td>
-                <td className="muted">{g.submissions}</td>
-                <td className="muted">{g.placed}</td>
-                <td>
-                  <span className="badge badge-muted">
-                    {formatPercent(g.fillRate)}
-                  </span>
-                </td>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>{firstColumn}</th>
+                <th>Submissions</th>
+                <th>Placed</th>
+                <th>Fill rate</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((g) => (
+                <tr key={g.key}>
+                  <td style={{ fontWeight: 600 }}>{g.label}</td>
+                  <td className="muted">{g.submissions}</td>
+                  <td className="muted">{g.placed}</td>
+                  <td>
+                    <span className="badge badge-muted">
+                      {formatPercent(g.fillRate)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

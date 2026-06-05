@@ -131,58 +131,60 @@ export default async function LicensingPage({
             }
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Clinician</th>
-                <th>Role</th>
-                <th>Target state</th>
-                <th>Status</th>
-                <th>Checklist</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => {
-                const role = a.provider?.clinician_role ?? null;
-                const progress = licenseProgress(
-                  parseLicenseBundle(a.document_bundle),
-                  role,
-                );
-                const status = a.status as LicenseApplicationStatus;
-                return (
-                  <tr key={a.id} className="table-row-link">
-                    <td>
-                      <Link
-                        href={`/licensing/${a.id}`}
-                        style={{ fontWeight: 700 }}
-                      >
-                        {a.provider?.full_name ?? "Unknown clinician"}
-                      </Link>
-                    </td>
-                    <td className="muted">{role ?? "—"}</td>
-                    <td>
-                      <span className="badge badge-muted">{a.state}</span>
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          toneClass[LICENSE_STATUS_TONE[status]] ??
-                          "badge-muted"
-                        }`}
-                      >
-                        {LICENSE_STATUS_LABELS[status]}
-                      </span>
-                    </td>
-                    <td className="muted">
-                      {progress.complete}/{progress.total} · {progress.percent}%
-                    </td>
-                    <td className="muted">{fmtDate(a.updated_at)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Clinician</th>
+                  <th>Role</th>
+                  <th>Target state</th>
+                  <th>Status</th>
+                  <th>Checklist</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((a) => {
+                  const role = a.provider?.clinician_role ?? null;
+                  const progress = licenseProgress(
+                    parseLicenseBundle(a.document_bundle),
+                    role,
+                  );
+                  const status = a.status as LicenseApplicationStatus;
+                  return (
+                    <tr key={a.id} className="table-row-link">
+                      <td>
+                        <Link
+                          href={`/licensing/${a.id}`}
+                          style={{ fontWeight: 700 }}
+                        >
+                          {a.provider?.full_name ?? "Unknown clinician"}
+                        </Link>
+                      </td>
+                      <td className="muted">{role ?? "—"}</td>
+                      <td>
+                        <span className="badge badge-muted">{a.state}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            toneClass[LICENSE_STATUS_TONE[status]] ??
+                            "badge-muted"
+                          }`}
+                        >
+                          {LICENSE_STATUS_LABELS[status]}
+                        </span>
+                      </td>
+                      <td className="muted">
+                        {progress.complete}/{progress.total} · {progress.percent}%
+                      </td>
+                      <td className="muted">{fmtDate(a.updated_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

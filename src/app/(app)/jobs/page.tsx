@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState, Pagination } from "@/components/ui";
-import { IconPlus, IconSearch } from "@/components/icons";
+import { IconPlus, IconSearch, IconActivity } from "@/components/icons";
 import { JOB_STATUSES, JOB_STATUS_LABELS, JOB_STATUS_TONE } from "@/lib/constants";
 import { fmtMoney } from "@/lib/format";
 import { parsePageParam, pageInfo } from "@/lib/pagination";
@@ -67,6 +67,9 @@ export default async function JobsPage({
           <p>Open roles across every client facility.</p>
         </div>
         <div className="row" style={{ gap: 10 }}>
+          <Link href="/jobs/health" className="btn">
+            <IconActivity width={15} height={15} /> Job health
+          </Link>
           <Link href="/jobs/scanned" className="btn">
             <IconSearch width={15} height={15} /> Scanned jobs
           </Link>

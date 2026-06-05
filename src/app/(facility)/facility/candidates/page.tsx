@@ -1,12 +1,19 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireFacilityContact } from "@/lib/auth";
 import { EmptyState, StageBadge } from "@/components/ui";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/constants";
 import { TIER_META, type MatchTier } from "@/lib/match";
 import { fmtDate } from "@/lib/format";
 import type { PipelineStage } from "@/lib/types";
+import {
+  facilityReadinessFor,
+  facilityReadinessUnknown,
+  type FacilityReadinessSignal,
+} from "@/lib/facility-readiness";
+import type { CredentialingItem } from "@/lib/credentialing";
 
 export const metadata: Metadata = { title: "Candidates" };
 export const dynamic = "force-dynamic";
@@ -76,6 +83,99 @@ export default async function FacilityCandidatesPage({
     submissions = data ?? [];
   }
 
+  // ── Per-candidate readiness signal (rolled-up verdict only) ──────────────
+  //
+  // RLS does not grant facility_contact read access to credentialing_items or
+  // provider_credentials (see migrations 0003/0007/0011), and that's correct:
+  // those tables are full of internal credentialing detail a facility should
+  // never see. But the *rolled-up verdict* — "ready to start / in progress /
+  // pending" — is exactly the transparency signal the 2026 VMS commentary
+  // names as table-stakes for facility-side portals.
+  //
+  // Security model — enforced server-side, in this page:
+  //   1. The user is already proven to be a facility_contact for `facility_id`
+  //      (requireFacilityContact above).
+  //   2. We only ever consider providers that this facility has *already* been
+  //      submitted a candidate for, by AlignMD (the submissions read above is
+  //      RLS-scoped to this facility's jobs — they cannot synthesise an
+  //      arbitrary provider id).
+  //   3. The admin client below is server-only — the service-role key never
+  //      reaches the browser — and is constrained by .in("provider_id", …)
+  //      to that exact set of already-submitted providers.
+  //   4. We compute the verdict here and pass only the verdict (label, tone,
+  //      tier) into JSX. The raw credentialing_items rows and the raw
+  //      provider_credentials rows never leave the server frame.
+  //   5. facilityReadinessFor() is the only escape hatch out of the raw
+  //      readiness numbers — it deliberately drops packetPercent, gap counts,
+  //      named credential expiries and the blocked flag.
+  //
+  // Degrades cleanly: if migration 0011 is absent, the credentialing_items
+  // query throws, we fall back to an empty map, and every row reads
+  // "Onboarding pending" instead of crashing.
+  const readinessByProvider = new Map<string, FacilityReadinessSignal>();
+  const providerIds = Array.from(
+    new Set(
+      submissions
+        .map((s: any) => s.provider?.id ?? s.provider_id)
+        .filter((id: string | null | undefined): id is string => !!id),
+    ),
+  );
+  if (providerIds.length) {
+    const admin = createAdminClient();
+    let items: CredentialingItem[] = [];
+    try {
+      const { data } = await admin
+        .from("credentialing_items")
+        .select(
+          "id, provider_id, item_type, status, due_date, completed_on, verified_by, notes, created_at, updated_at",
+        )
+        .in("provider_id", providerIds);
+      items = (data ?? []) as CredentialingItem[];
+    } catch {
+      items = [];
+    }
+    // Mirror the "non-privileged staff" view of provider_credentials —
+    // malpractice rows are not used by the readiness computation, so we
+    // exclude them at the read.
+    let creds: Array<{ provider_id: string; expires_on: string | null }> = [];
+    try {
+      const { data } = await admin
+        .from("provider_credentials")
+        .select("provider_id, expires_on")
+        .in("provider_id", providerIds)
+        .neq("type", "malpractice");
+      creds = (data ?? []) as typeof creds;
+    } catch {
+      creds = [];
+    }
+
+    const itemsByProvider = new Map<string, CredentialingItem[]>();
+    for (const row of items) {
+      const bucket = itemsByProvider.get(row.provider_id);
+      if (bucket) bucket.push(row);
+      else itemsByProvider.set(row.provider_id, [row]);
+    }
+    const credsByProvider = new Map<
+      string,
+      Array<{ expires_on: string | null }>
+    >();
+    for (const row of creds) {
+      const bucket = credsByProvider.get(row.provider_id);
+      if (bucket) bucket.push({ expires_on: row.expires_on });
+      else credsByProvider.set(row.provider_id, [{ expires_on: row.expires_on }]);
+    }
+
+    for (const id of providerIds) {
+      readinessByProvider.set(
+        id,
+        facilityReadinessFor({
+          items: itemsByProvider.get(id) ?? [],
+          credentials: credsByProvider.get(id) ?? [],
+        }),
+      );
+    }
+  }
+
   const stageFilter =
     searchParams.stage && PIPELINE_STAGES.includes(searchParams.stage as PipelineStage)
       ? (searchParams.stage as PipelineStage)
@@ -89,6 +189,24 @@ export default async function FacilityCandidatesPage({
     stage,
     count: submissions.filter((s: any) => s.stage === stage).length,
   }));
+
+  // KPI counts for the readiness strip. We count each candidate (submission)
+  // once — duplicates across multiple roles are intentional, since each
+  // submission is a real piece of work for the facility's pipeline.
+  const readinessCounts = (() => {
+    let ready = 0;
+    let progressing = 0; // "nearly" + "in_progress" — same facility-facing message
+    let pending = 0;
+    for (const s of submissions) {
+      const id = s.provider?.id ?? s.provider_id;
+      const r = id ? readinessByProvider.get(id) : undefined;
+      const tier = r?.tier ?? "not_started";
+      if (tier === "ready") ready++;
+      else if (tier === "not_started") pending++;
+      else progressing++;
+    }
+    return { ready, progressing, pending };
+  })();
 
   return (
     <>
@@ -116,6 +234,29 @@ export default async function FacilityCandidatesPage({
         </div>
       ) : (
         <>
+          <div className="kpi-grid">
+            <div className="kpi">
+              <div className="kpi-label">Ready to start</div>
+              <div className="kpi-value">{readinessCounts.ready}</div>
+              <div className="kpi-sub">cleared to begin</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">In credentialing</div>
+              <div className="kpi-value">{readinessCounts.progressing}</div>
+              <div className="kpi-sub">paperwork in motion</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Onboarding pending</div>
+              <div className="kpi-value">{readinessCounts.pending}</div>
+              <div className="kpi-sub">not yet started</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Total submitted</div>
+              <div className="kpi-value">{submissions.length}</div>
+              <div className="kpi-sub">across your roles</div>
+            </div>
+          </div>
+
           <div className="toolbar">
             <Link
               href="/facility/candidates"
@@ -159,6 +300,7 @@ export default async function FacilityCandidatesPage({
                       <th>Role applied to</th>
                       <th>Experience</th>
                       <th>Match</th>
+                      <th>Readiness</th>
                       <th>Submitted</th>
                       <th>Stage</th>
                     </tr>
@@ -167,6 +309,12 @@ export default async function FacilityCandidatesPage({
                     {visible.map((s: any) => {
                       const tier = tierForScore(s.match_score);
                       const meta = tier ? TIER_META[tier] : null;
+                      const providerId: string | null =
+                        s.provider?.id ?? s.provider_id ?? null;
+                      const readiness =
+                        (providerId
+                          ? readinessByProvider.get(providerId)
+                          : null) ?? facilityReadinessUnknown();
                       return (
                         <tr key={s.id} className="table-row-link">
                           <td>
@@ -206,6 +354,16 @@ export default async function FacilityCandidatesPage({
                               "—"
                             )}
                           </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                toneClass[readiness.tone] ?? "badge-muted"
+                              }`}
+                              title={readiness.summary}
+                            >
+                              {readiness.label}
+                            </span>
+                          </td>
                           <td className="muted">
                             {fmtDate(s.submitted_on)}
                           </td>
@@ -224,8 +382,10 @@ export default async function FacilityCandidatesPage({
       )}
 
       <p className="muted" style={{ fontSize: 11, marginTop: 18 }}>
-        Candidate submissions and pipeline stages are managed by AlignMD
-        recruiters. Contact your recruiter with any questions about a candidate.
+        Candidate submissions, pipeline stages and readiness are managed by
+        AlignMD recruiters. The readiness signal indicates whether onboarding
+        and credentialing are complete; contact your recruiter for any
+        specifics on a particular candidate.
       </p>
     </>
   );

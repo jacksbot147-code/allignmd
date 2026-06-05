@@ -9,6 +9,8 @@ import {
   IconPipeline,
   IconCredentials,
   IconReadiness,
+  IconOpportunity,
+  IconToday,
   IconFacilities,
   IconJobs,
   IconImport,
@@ -30,8 +32,10 @@ const NAV: {
   adminOnly?: boolean;
 }[] = [
   { href: "/dashboard", label: "Dashboard", icon: <IconDashboard className="ico" /> },
+  { href: "/today", label: "Today", icon: <IconToday className="ico" /> },
   { href: "/providers", label: "Providers", icon: <IconProviders className="ico" /> },
   { href: "/jobs", label: "Jobs", icon: <IconJobs className="ico" /> },
+  { href: "/opportunities", label: "Opportunities", icon: <IconOpportunity className="ico" /> },
   { href: "/facilities", label: "Facilities", icon: <IconFacilities className="ico" /> },
   { href: "/pipeline", label: "Pipeline", icon: <IconPipeline className="ico" /> },
   { href: "/credentials", label: "Credentials", icon: <IconCredentials className="ico" /> },

@@ -88,7 +88,9 @@ export default async function ProviderDetailPage({
   searchParams: { tab?: string; error?: string };
 }) {
   const id = params.id;
-  const tab = searchParams.tab ?? "overview";
+  // Fall back to "overview" for a missing OR unrecognized ?tab= value, so an
+  // unknown tab never renders an empty body.
+  const tab = TABS.some((t) => t.key === searchParams.tab) ? searchParams.tab! : "overview";
   const me = await getAppUser();
   const privileged = isPrivileged(me?.role);
   const supabase = createClient();
@@ -433,53 +435,55 @@ export default async function ProviderDetailPage({
               hint="Open jobs are scored against this clinician here as facilities post them."
             />
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Facility</th>
-                  <th>Match</th>
-                  <th>Tier</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobMatches.map(({ job, result }) => {
-                  const meta = TIER_META[result.tier];
-                  return (
-                    <tr key={job.id}>
-                      <td>
-                        <Link
-                          href={`/jobs/${job.id}`}
-                          style={{ fontWeight: 700 }}
-                        >
-                          {job.title}
-                        </Link>
-                        {job.specialty && (
-                          <span className="muted" style={{ fontSize: 11 }}>
-                            {" "}
-                            · {job.specialty}
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Facility</th>
+                    <th>Match</th>
+                    <th>Tier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobMatches.map(({ job, result }) => {
+                    const meta = TIER_META[result.tier];
+                    return (
+                      <tr key={job.id}>
+                        <td>
+                          <Link
+                            href={`/jobs/${job.id}`}
+                            style={{ fontWeight: 700 }}
+                          >
+                            {job.title}
+                          </Link>
+                          {job.specialty && (
+                            <span className="muted" style={{ fontSize: 11 }}>
+                              {" "}
+                              · {job.specialty}
+                            </span>
+                          )}
+                        </td>
+                        <td className="muted">
+                          {job.facility?.name ?? "—"}
+                          {job.facility?.state ? ` · ${job.facility.state}` : ""}
+                        </td>
+                        <td>
+                          <span className="badge badge-muted">
+                            {result.score}
                           </span>
-                        )}
-                      </td>
-                      <td className="muted">
-                        {job.facility?.name ?? "—"}
-                        {job.facility?.state ? ` · ${job.facility.state}` : ""}
-                      </td>
-                      <td>
-                        <span className="badge badge-muted">
-                          {result.score}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${badgeTone[meta.tone]}`}>
-                          {meta.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td>
+                          <span className={`badge ${badgeTone[meta.tone]}`}>
+                            {meta.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -510,63 +514,65 @@ export default async function ProviderDetailPage({
                 hint="Add licenses, DEA, board certs and life-support cards below."
               />
             ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>State</th>
-                    <th>Number</th>
-                    <th>Expires</th>
-                    <th>Status</th>
-                    <th>Verified</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {creds.map((c: any) => (
-                    <tr key={c.id}>
-                      <td>
-                        <b>{CREDENTIAL_LABELS[c.type as keyof typeof CREDENTIAL_LABELS]}</b>
-                        {c.is_compact && (
-                          <span className="badge badge-teal" style={{ marginLeft: 6 }}>
-                            Compact
-                          </span>
-                        )}
-                      </td>
-                      <td>{c.state || "—"}</td>
-                      <td className="mono" style={{ fontSize: 12 }}>
-                        {c.number || "—"}
-                      </td>
-                      <td className="muted">
-                        {fmtDate(c.expires_on)}
-                        <div style={{ fontSize: 11 }}>{expiryCopy(c.expires_on)}</div>
-                      </td>
-                      <td><ExpiryBadge expiresOn={c.expires_on} /></td>
-                      <td><VerifiedBadge verified={c.verified} /></td>
-                      <td>
-                        <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
-                          {!c.verified && (
-                            <form action={verifyCredential}>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>State</th>
+                      <th>Number</th>
+                      <th>Expires</th>
+                      <th>Status</th>
+                      <th>Verified</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {creds.map((c: any) => (
+                      <tr key={c.id}>
+                        <td>
+                          <b>{CREDENTIAL_LABELS[c.type as keyof typeof CREDENTIAL_LABELS]}</b>
+                          {c.is_compact && (
+                            <span className="badge badge-teal" style={{ marginLeft: 6 }}>
+                              Compact
+                            </span>
+                          )}
+                        </td>
+                        <td>{c.state || "—"}</td>
+                        <td className="mono" style={{ fontSize: 12 }}>
+                          {c.number || "—"}
+                        </td>
+                        <td className="muted">
+                          {fmtDate(c.expires_on)}
+                          <div style={{ fontSize: 11 }}>{expiryCopy(c.expires_on)}</div>
+                        </td>
+                        <td><ExpiryBadge expiresOn={c.expires_on} /></td>
+                        <td><VerifiedBadge verified={c.verified} /></td>
+                        <td>
+                          <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
+                            {!c.verified && (
+                              <form action={verifyCredential}>
+                                <input type="hidden" name="credential_id" value={c.id} />
+                                <input type="hidden" name="provider_id" value={id} />
+                                <button className="btn btn-sm" type="submit">
+                                  Verify
+                                </button>
+                              </form>
+                            )}
+                            <form action={deleteCredential}>
                               <input type="hidden" name="credential_id" value={c.id} />
                               <input type="hidden" name="provider_id" value={id} />
-                              <button className="btn btn-sm" type="submit">
-                                Verify
+                              <button className="btn btn-sm btn-danger" type="submit">
+                                Remove
                               </button>
                             </form>
-                          )}
-                          <form action={deleteCredential}>
-                            <input type="hidden" name="credential_id" value={c.id} />
-                            <input type="hidden" name="provider_id" value={id} />
-                            <button className="btn btn-sm btn-danger" type="submit">
-                              Remove
-                            </button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -670,68 +676,70 @@ export default async function ProviderDetailPage({
                 hint="Upload CVs, licenses, certification cards and IDs below."
               />
             ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Document</th>
-                    <th>Sensitivity</th>
-                    <th>Uploaded</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {signedDocs.map((d: any) => (
-                    <tr key={d.id}>
-                      <td>
-                        <span className="row" style={{ gap: 8 }}>
-                          <IconDoc width={16} height={16} style={{ color: "var(--muted)" }} />
-                          <b>{titleCase(d.doc_type)}</b>
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            d.sensitivity === "restricted"
-                              ? "badge-danger"
-                              : d.sensitivity === "sensitive"
-                                ? "badge-warn"
-                                : "badge-muted"
-                          }`}
-                        >
-                          {titleCase(d.sensitivity)}
-                        </span>
-                      </td>
-                      <td className="muted">{fmtDate(d.created_at)}</td>
-                      <td>
-                        <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
-                          {d.url ? (
-                            <a
-                              className="btn btn-sm"
-                              href={d.url}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Open
-                            </a>
-                          ) : (
-                            <span className="muted" style={{ fontSize: 12 }}>
-                              Unavailable
-                            </span>
-                          )}
-                          <form action={deleteDocument}>
-                            <input type="hidden" name="document_id" value={d.id} />
-                            <input type="hidden" name="provider_id" value={id} />
-                            <input type="hidden" name="storage_path" value={d.storage_path} />
-                            <button className="btn btn-sm btn-danger" type="submit">
-                              Remove
-                            </button>
-                          </form>
-                        </div>
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Sensitivity</th>
+                      <th>Uploaded</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {signedDocs.map((d: any) => (
+                      <tr key={d.id}>
+                        <td>
+                          <span className="row" style={{ gap: 8 }}>
+                            <IconDoc width={16} height={16} style={{ color: "var(--muted)" }} />
+                            <b>{titleCase(d.doc_type)}</b>
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              d.sensitivity === "restricted"
+                                ? "badge-danger"
+                                : d.sensitivity === "sensitive"
+                                  ? "badge-warn"
+                                  : "badge-muted"
+                            }`}
+                          >
+                            {titleCase(d.sensitivity)}
+                          </span>
+                        </td>
+                        <td className="muted">{fmtDate(d.created_at)}</td>
+                        <td>
+                          <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
+                            {d.url ? (
+                              <a
+                                className="btn btn-sm"
+                                href={d.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Open
+                              </a>
+                            ) : (
+                              <span className="muted" style={{ fontSize: 12 }}>
+                                Unavailable
+                              </span>
+                            )}
+                            <form action={deleteDocument}>
+                              <input type="hidden" name="document_id" value={d.id} />
+                              <input type="hidden" name="provider_id" value={id} />
+                              <input type="hidden" name="storage_path" value={d.storage_path} />
+                              <button className="btn btn-sm btn-danger" type="submit">
+                                Remove
+                              </button>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -784,54 +792,56 @@ export default async function ProviderDetailPage({
                 hint="Add the shift types and date ranges this clinician is open to."
               />
             ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Note</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {availability.map((a: any) => (
-                    <tr key={a.id}>
-                      <td>
-                        <span className="badge badge-teal">
-                          {AVAILABILITY_LABELS[
-                            a.block_type as keyof typeof AVAILABILITY_LABELS
-                          ] ?? titleCase(a.block_type)}
-                        </span>
-                      </td>
-                      <td className="muted">{fmtDate(a.block_start)}</td>
-                      <td className="muted">{fmtDate(a.block_end)}</td>
-                      <td>{a.note || "—"}</td>
-                      <td>
-                        <div
-                          className="row"
-                          style={{ gap: 4, justifyContent: "flex-end" }}
-                        >
-                          <form action={deleteAvailability}>
-                            <input
-                              type="hidden"
-                              name="availability_id"
-                              value={a.id}
-                            />
-                            <input type="hidden" name="provider_id" value={id} />
-                            <button
-                              className="btn btn-sm btn-danger"
-                              type="submit"
-                            >
-                              Remove
-                            </button>
-                          </form>
-                        </div>
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Note</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {availability.map((a: any) => (
+                      <tr key={a.id}>
+                        <td>
+                          <span className="badge badge-teal">
+                            {AVAILABILITY_LABELS[
+                              a.block_type as keyof typeof AVAILABILITY_LABELS
+                            ] ?? titleCase(a.block_type)}
+                          </span>
+                        </td>
+                        <td className="muted">{fmtDate(a.block_start)}</td>
+                        <td className="muted">{fmtDate(a.block_end)}</td>
+                        <td>{a.note || "—"}</td>
+                        <td>
+                          <div
+                            className="row"
+                            style={{ gap: 4, justifyContent: "flex-end" }}
+                          >
+                            <form action={deleteAvailability}>
+                              <input
+                                type="hidden"
+                                name="availability_id"
+                                value={a.id}
+                              />
+                              <input type="hidden" name="provider_id" value={id} />
+                              <button
+                                className="btn btn-sm btn-danger"
+                                type="submit"
+                              >
+                                Remove
+                              </button>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 

@@ -11,6 +11,8 @@ import {
   IconPipeline,
   IconJobs,
   IconCredentials,
+  IconReadiness,
+  IconOpportunity,
   IconLogout,
 } from "./icons";
 import { signOut } from "@/app/login/actions";
@@ -30,9 +32,11 @@ const CLINICIAN_NAV: NavItem[] = [
   { href: "/clinician", label: "Home", icon: <IconDashboard className="ico" />, exact: true },
   { href: "/clinician/profile", label: "My profile", icon: <IconProviders className="ico" /> },
   { href: "/clinician/credentials", label: "Credentials", icon: <IconCredentials className="ico" /> },
+  { href: "/clinician/readiness", label: "Readiness", icon: <IconReadiness className="ico" /> },
   { href: "/clinician/availability", label: "Availability", icon: <IconActivity className="ico" /> },
   { href: "/clinician/documents", label: "Documents", icon: <IconDoc className="ico" /> },
   { href: "/clinician/jobs", label: "Open jobs", icon: <IconJobs className="ico" /> },
+  { href: "/clinician/opportunities", label: "My matches", icon: <IconOpportunity className="ico" /> },
   { href: "/clinician/submissions", label: "My submissions", icon: <IconPipeline className="ico" /> },
 ];
 

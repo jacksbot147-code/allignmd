@@ -128,12 +128,44 @@ export async function runJobFeedIngestion(): Promise<IngestSummary> {
       });
 
       if (uniqueRows.length > 0) {
-        const { data: upserted, error: upsertErr } = await admin
+        // Before upserting, look up which (source, source_job_id) keys already
+        // exist. An upsert touches both new and existing rows and bumps every
+        // matched row's fetched_at, so the post-write state can't tell them
+        // apart — the only reliable signal is whether the key existed first.
+        // The .in() lookups are chunked to keep request URLs within limits.
+        const existingKeys = new Set<string>();
+        for (let i = 0; i < uniqueRows.length; i += 200) {
+          const chunk = uniqueRows.slice(i, i + 200);
+          const { data: existingRows } = await admin
+            .from("external_jobs")
+            .select("source,source_job_id")
+            .in(
+              "source_job_id",
+              chunk.map((r) => r.source_job_id),
+            );
+          for (const e of existingRows ?? []) {
+            const row = e as Pick<
+              ExternalJobRow,
+              "source" | "source_job_id"
+            >;
+            existingKeys.add(`${row.source}::${row.source_job_id}`);
+          }
+        }
+
+        const { error: upsertErr } = await admin
           .from("external_jobs")
-          .upsert(uniqueRows, { onConflict: "source,source_job_id" })
-          .select("id");
+          .upsert(uniqueRows, { onConflict: "source,source_job_id" });
         if (upsertErr) throw upsertErr;
-        updated += upserted?.length ?? uniqueRows.length;
+
+        // Genuinely-new rows are those whose key was absent beforehand; every
+        // other upserted row was an update. Their sum is the batch size, so
+        // the combined inserted+updated total is unchanged.
+        let newRows = 0;
+        for (const r of uniqueRows) {
+          if (!existingKeys.has(`${r.source}::${r.source_job_id}`)) newRows++;
+        }
+        inserted += newRows;
+        updated += uniqueRows.length - newRows;
       }
 
       // Deactivate this source's postings that did not appear in this run.
@@ -146,16 +178,6 @@ export async function runJobFeedIngestion(): Promise<IngestSummary> {
         .select("id");
       deactivated += stale?.length ?? 0;
     }
-
-    // Refine the inserted/updated split: rows whose fetched_at is at or after
-    // this run's start and that are active count as freshly seen this run.
-    const { count: freshCount } = await admin
-      .from("external_jobs")
-      .select("id", { count: "exact", head: true })
-      .gte("fetched_at", startedAt)
-      .eq("active", true);
-    inserted = freshCount ?? 0;
-    updated = Math.max(0, updated - inserted);
 
     const finishedAt = new Date().toISOString();
     const sources = adapters.map((a) => a.id);

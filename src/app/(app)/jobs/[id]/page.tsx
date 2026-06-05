@@ -13,6 +13,9 @@ import {
 } from "@/lib/constants";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { scoreMatch, TIER_META } from "@/lib/match";
+import { computeReadiness, READINESS_META } from "@/lib/readiness";
+import type { ReadinessResult } from "@/lib/readiness";
+import type { CredentialingItem } from "@/lib/credentialing";
 import type {
   Job,
   Facility,
@@ -51,6 +54,28 @@ const badgeTone: Record<string, string> = {
   muted: "badge-muted",
 };
 
+/**
+ * Small credentialing-readiness badge — how ready a clinician's onboarding
+ * packet is. Reused by both the submitted-clinician table and the suggested-
+ * clinician cards so the two lists can never disagree.
+ */
+function ReadinessBadge({
+  readiness,
+}: {
+  readiness: ReadinessResult | undefined;
+}) {
+  if (!readiness) return <span className="muted">—</span>;
+  const meta = READINESS_META[readiness.tier];
+  return (
+    <span
+      className={`badge ${badgeTone[meta.tone] ?? "badge-muted"}`}
+      title={readiness.summary}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
 export default async function JobDetailPage({
   params,
   searchParams,
@@ -70,24 +95,31 @@ export default async function JobDetailPage({
   const job = jobRow as Job & { facility: Facility | null };
   const facility = job.facility;
 
-  const [reqRes, provRes, credRes, subRes, facListRes] = await Promise.all([
-    supabase.from("job_requirements").select("*").eq("job_id", id).limit(1),
-    supabase
-      .from("providers")
-      .select(
-        "id, full_name, clinician_role, specialty, years_experience, telehealth_ok, pipeline_stage",
-      )
-      .is("archived_at", null),
-    supabase
-      .from("provider_credentials")
-      .select("provider_id, type, state, is_compact, expires_on"),
-    supabase
-      .from("submissions")
-      .select("*, provider:providers(id, full_name, clinician_role, specialty)")
-      .eq("job_id", id)
-      .order("match_score", { ascending: false, nullsFirst: false }),
-    supabase.from("facilities").select("id, name").order("name"),
-  ]);
+  const [reqRes, provRes, credRes, subRes, facListRes, itemsRes] =
+    await Promise.all([
+      supabase.from("job_requirements").select("*").eq("job_id", id).limit(1),
+      supabase
+        .from("providers")
+        .select(
+          "id, full_name, clinician_role, specialty, years_experience, telehealth_ok, pipeline_stage",
+        )
+        .is("archived_at", null),
+      supabase
+        .from("provider_credentials")
+        .select("provider_id, type, state, is_compact, expires_on"),
+      supabase
+        .from("submissions")
+        .select(
+          "*, provider:providers(id, full_name, clinician_role, specialty)",
+        )
+        .eq("job_id", id)
+        .order("match_score", { ascending: false, nullsFirst: false }),
+      supabase.from("facilities").select("id, name").order("name"),
+      // credentialing_items (migration 0011) may not be applied yet — this
+      // query is allowed to error; computeReadiness then reads every clinician
+      // back as "not started" rather than crashing.
+      supabase.from("credentialing_items").select("*"),
+    ]);
 
   const requirement = (reqRes.data?.[0] ?? null) as JobRequirement | null;
   const providers = provRes.data ?? [];
@@ -101,6 +133,27 @@ export default async function JobDetailPage({
     const list = credsByProvider.get(c.provider_id) ?? [];
     list.push(c);
     credsByProvider.set(c.provider_id, list);
+  }
+
+  // Credentialing-packet rows (migration 0011) grouped by provider, then one
+  // readiness verdict per clinician — computed once and shared by the
+  // submitted-clinician table and the suggested-clinician cards below.
+  const credentialingReady = !itemsRes.error;
+  const itemsByProvider = new Map<string, CredentialingItem[]>();
+  for (const it of (itemsRes.data as CredentialingItem[]) ?? []) {
+    const list = itemsByProvider.get(it.provider_id) ?? [];
+    list.push(it);
+    itemsByProvider.set(it.provider_id, list);
+  }
+  const readinessByProvider = new Map<string, ReadinessResult>();
+  for (const p of providers as any[]) {
+    readinessByProvider.set(
+      p.id,
+      computeReadiness({
+        items: itemsByProvider.get(p.id) ?? [],
+        credentials: credsByProvider.get(p.id) ?? [],
+      }),
+    );
   }
 
   // Inputs the match engine needs from the job side.
@@ -151,6 +204,14 @@ export default async function JobDetailPage({
 
       {searchParams.error && (
         <div className="alert alert-danger">{searchParams.error}</div>
+      )}
+
+      {!credentialingReady && (
+        <div className="alert alert-info">
+          Credentialing-packet tracking isn&apos;t set up yet — apply migration{" "}
+          <code>0011_credentialing.sql</code> to track real packet readiness.
+          Until then every clinician below reads as &quot;Not started&quot;.
+        </div>
       )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -259,80 +320,88 @@ export default async function JobDetailPage({
             hint="Submit a matched clinician below to start this job's pipeline."
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Clinician</th>
-                <th>Match</th>
-                <th>Submitted</th>
-                <th>Stage</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {submissions.map((s: any) => (
-                <tr key={s.id}>
-                  <td>
-                    <Link
-                      href={`/providers/${s.provider?.id}`}
-                      style={{ fontWeight: 700 }}
-                    >
-                      {s.provider?.full_name ?? "—"}
-                    </Link>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      {s.provider?.clinician_role
-                        ? ` · ${s.provider.clinician_role}`
-                        : ""}
-                    </span>
-                  </td>
-                  <td>
-                    {s.match_score != null ? (
-                      <span className="badge badge-muted">
-                        {s.match_score}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="muted">{fmtDate(s.submitted_on)}</td>
-                  <td>
-                    <form
-                      action={changeSubmissionStage}
-                      className="row"
-                      style={{ gap: 6 }}
-                    >
-                      <input type="hidden" name="submission_id" value={s.id} />
-                      <input type="hidden" name="job_id" value={job.id} />
-                      <select
-                        className="select"
-                        name="stage"
-                        defaultValue={s.stage}
-                        style={{ padding: "4px 8px", fontSize: 12 }}
-                      >
-                        {PIPELINE_STAGES.map((st) => (
-                          <option key={st} value={st}>
-                            {STAGE_LABELS[st]}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className="btn btn-sm">
-                        Save
-                      </button>
-                    </form>
-                  </td>
-                  <td>
-                    <form action={removeSubmission}>
-                      <input type="hidden" name="submission_id" value={s.id} />
-                      <input type="hidden" name="job_id" value={job.id} />
-                      <button type="submit" className="btn btn-sm btn-danger">
-                        Remove
-                      </button>
-                    </form>
-                  </td>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Clinician</th>
+                  <th>Match</th>
+                  <th>Credentialing</th>
+                  <th>Submitted</th>
+                  <th>Stage</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {submissions.map((s: any) => (
+                  <tr key={s.id}>
+                    <td>
+                      <Link
+                        href={`/providers/${s.provider?.id}`}
+                        style={{ fontWeight: 700 }}
+                      >
+                        {s.provider?.full_name ?? "—"}
+                      </Link>
+                      <span className="muted" style={{ fontSize: 11 }}>
+                        {s.provider?.clinician_role
+                          ? ` · ${s.provider.clinician_role}`
+                          : ""}
+                      </span>
+                    </td>
+                    <td>
+                      {s.match_score != null ? (
+                        <span className="badge badge-muted">
+                          {s.match_score}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      <ReadinessBadge
+                        readiness={readinessByProvider.get(s.provider?.id)}
+                      />
+                    </td>
+                    <td className="muted">{fmtDate(s.submitted_on)}</td>
+                    <td>
+                      <form
+                        action={changeSubmissionStage}
+                        className="row"
+                        style={{ gap: 6 }}
+                      >
+                        <input type="hidden" name="submission_id" value={s.id} />
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <select
+                          className="select"
+                          name="stage"
+                          defaultValue={s.stage}
+                          style={{ padding: "4px 8px", fontSize: 12 }}
+                        >
+                          {PIPELINE_STAGES.map((st) => (
+                            <option key={st} value={st}>
+                              {STAGE_LABELS[st]}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className="btn btn-sm">
+                          Save
+                        </button>
+                      </form>
+                    </td>
+                    <td>
+                      <form action={removeSubmission}>
+                        <input type="hidden" name="submission_id" value={s.id} />
+                        <input type="hidden" name="job_id" value={job.id} />
+                        <button type="submit" className="btn btn-sm btn-danger">
+                          Remove
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -353,6 +422,7 @@ export default async function JobDetailPage({
           <div className="stack" style={{ padding: 14, gap: 10 }}>
             {candidates.map(({ provider, result }) => {
               const meta = TIER_META[result.tier];
+              const readiness = readinessByProvider.get(provider.id);
               return (
                 <div
                   key={provider.id}
@@ -399,6 +469,28 @@ export default async function JobDetailPage({
                             {r.text}
                           </span>
                         ))}
+                      </div>
+                      <div
+                        className="row"
+                        style={{
+                          gap: 6,
+                          marginTop: 8,
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          className="muted"
+                          style={{ fontSize: 11, fontWeight: 600 }}
+                        >
+                          Credentialing
+                        </span>
+                        <ReadinessBadge readiness={readiness} />
+                        {readiness && (
+                          <span className="muted" style={{ fontSize: 11 }}>
+                            {readiness.packetPercent}% packet complete
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>

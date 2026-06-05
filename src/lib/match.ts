@@ -40,11 +40,13 @@ const W_LOCATION = 10;
 
 // ── Compact / multistate license member states ────────────────────────────
 // Advisory lists — review against the NCSBN / IMLCC rosters annually.
+// Last reviewed: May 2026. eNLC: CT and RI added (both have enacted the
+// Nurse Licensure Compact) — 41 jurisdictions listed here.
 const NURSE_COMPACT = new Set([
-  "AL", "AZ", "AR", "CO", "DE", "FL", "GA", "GU", "ID", "IN", "IA", "KS",
-  "KY", "LA", "ME", "MD", "MS", "MO", "MT", "NE", "NH", "NJ", "NM", "NC",
-  "ND", "OH", "OK", "PA", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
-  "WV", "WI", "WY",
+  "AL", "AZ", "AR", "CO", "CT", "DE", "FL", "GA", "GU", "ID", "IN", "IA",
+  "KS", "KY", "LA", "ME", "MD", "MS", "MO", "MT", "NE", "NH", "NJ", "NM",
+  "NC", "ND", "OH", "OK", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT",
+  "VA", "WA", "WV", "WI", "WY",
 ]);
 const PHYSICIAN_COMPACT = new Set([
   "AL", "AZ", "CO", "DC", "GA", "GU", "IL", "IA", "ID", "KS", "KY", "ME",

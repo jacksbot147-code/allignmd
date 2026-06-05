@@ -150,3 +150,21 @@ export const IconReadiness = (p: P) => (
     <path d="M8.5 13.5l2.4 2.4 4.6-4.8" />
   </svg>
 );
+// Bullseye — placement opportunities (open jobs you can fill right now).
+export const IconOpportunity = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1.4" />
+  </svg>
+);
+// Sunrise over horizon — today's prioritised desk work.
+export const IconToday = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 18h18" />
+    <path d="M5 18a7 7 0 0 1 14 0" />
+    <path d="M12 5v3" />
+    <path d="M5.6 8.6l1.7 1.7" />
+    <path d="M18.4 8.6l-1.7 1.7" />
+  </svg>
+);

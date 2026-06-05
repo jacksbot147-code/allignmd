@@ -384,59 +384,61 @@ export default async function ScannedJobsPage({
                         </p>
                       </div>
                     ) : (
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Clinician</th>
-                            <th>Specialty</th>
-                            <th>Score</th>
-                            <th>Match</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {top.map(({ provider, result }) => {
-                            const meta = TIER_META[result.tier];
-                            return (
-                              <tr key={provider.id}>
-                                <td>
-                                  <Link
-                                    href={`/providers/${provider.id}`}
-                                    style={{ fontWeight: 700 }}
-                                  >
-                                    {provider.full_name}
-                                  </Link>
-                                  {provider.clinician_role && (
-                                    <span
-                                      className="muted"
-                                      style={{ fontSize: 11 }}
+                      <div className="table-wrap">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Clinician</th>
+                              <th>Specialty</th>
+                              <th>Score</th>
+                              <th>Match</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {top.map(({ provider, result }) => {
+                              const meta = TIER_META[result.tier];
+                              return (
+                                <tr key={provider.id}>
+                                  <td>
+                                    <Link
+                                      href={`/providers/${provider.id}`}
+                                      style={{ fontWeight: 700 }}
                                     >
-                                      {" "}
-                                      · {provider.clinician_role}
+                                      {provider.full_name}
+                                    </Link>
+                                    {provider.clinician_role && (
+                                      <span
+                                        className="muted"
+                                        style={{ fontSize: 11 }}
+                                      >
+                                        {" "}
+                                        · {provider.clinician_role}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="muted">
+                                    {provider.specialty ?? "—"}
+                                  </td>
+                                  <td>
+                                    <span className="badge badge-muted">
+                                      {result.score}
                                     </span>
-                                  )}
-                                </td>
-                                <td className="muted">
-                                  {provider.specialty ?? "—"}
-                                </td>
-                                <td>
-                                  <span className="badge badge-muted">
-                                    {result.score}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span
-                                    className={`badge ${
-                                      badgeTone[meta.tone] ?? "badge-muted"
-                                    }`}
-                                  >
-                                    {meta.label}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                  </td>
+                                  <td>
+                                    <span
+                                      className={`badge ${
+                                        badgeTone[meta.tone] ?? "badge-muted"
+                                      }`}
+                                    >
+                                      {meta.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 );

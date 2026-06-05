@@ -98,51 +98,53 @@ export default async function CredentialsPage({
             }
           />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Provider</th>
-                <th>Credential</th>
-                <th>State</th>
-                <th>Number</th>
-                <th>Expires</th>
-                <th>Status</th>
-                <th>Verified</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c: any) => (
-                <tr key={c.id} className="table-row-link">
-                  <td>
-                    <Link
-                      href={`/providers/${c.provider?.id}?tab=credentials`}
-                      style={{ fontWeight: 600 }}
-                    >
-                      {c.provider?.full_name ?? "—"}
-                    </Link>
-                  </td>
-                  <td>
-                    {CREDENTIAL_LABELS[c.type as keyof typeof CREDENTIAL_LABELS]}
-                    {c.is_compact && (
-                      <span className="badge badge-teal" style={{ marginLeft: 6 }}>
-                        Compact
-                      </span>
-                    )}
-                  </td>
-                  <td>{c.state || "—"}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>
-                    {c.number || "—"}
-                  </td>
-                  <td className="muted">
-                    {fmtDate(c.expires_on)}
-                    <div style={{ fontSize: 11 }}>{expiryCopy(c.expires_on)}</div>
-                  </td>
-                  <td><ExpiryBadge expiresOn={c.expires_on} /></td>
-                  <td><VerifiedBadge verified={c.verified} /></td>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Credential</th>
+                  <th>State</th>
+                  <th>Number</th>
+                  <th>Expires</th>
+                  <th>Status</th>
+                  <th>Verified</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((c: any) => (
+                  <tr key={c.id} className="table-row-link">
+                    <td>
+                      <Link
+                        href={`/providers/${c.provider?.id}?tab=credentials`}
+                        style={{ fontWeight: 600 }}
+                      >
+                        {c.provider?.full_name ?? "—"}
+                      </Link>
+                    </td>
+                    <td>
+                      {CREDENTIAL_LABELS[c.type as keyof typeof CREDENTIAL_LABELS]}
+                      {c.is_compact && (
+                        <span className="badge badge-teal" style={{ marginLeft: 6 }}>
+                          Compact
+                        </span>
+                      )}
+                    </td>
+                    <td>{c.state || "—"}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>
+                      {c.number || "—"}
+                    </td>
+                    <td className="muted">
+                      {fmtDate(c.expires_on)}
+                      <div style={{ fontSize: 11 }}>{expiryCopy(c.expires_on)}</div>
+                    </td>
+                    <td><ExpiryBadge expiresOn={c.expires_on} /></td>
+                    <td><VerifiedBadge verified={c.verified} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>
